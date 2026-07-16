@@ -1,20 +1,10 @@
 {
-  "name": "outlook-mealdeal",
-  "version": "2.0.0",
-  "description": "Fox's Boatyard staff meal deal + On-Site Café ordering system for The Outlook at Fox's (Vercel + MongoDB build)",
-  "main": "server/server.js",
-  "engines": {
-    "node": ">=18.0.0"
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 15
+    }
   },
-  "scripts": {
-    "start": "node server/server.js",
-    "dev": "node server/server.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2",
-    "node-cron": "^3.0.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "mongodb": "^6.10.0"
-  }
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/[...path]" }
+  ]
 }
