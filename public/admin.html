@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — The Outlook at Fox's</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+.stock-option { border-top: 1px solid #eee; padding: 10px 0; }
+.stock-option:first-child { border-top: none; }
+.stock-option-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.stock-option-head input[type=text] { font-weight:600; max-width: 260px; }
+.stock-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.stock-row input[type=text] { flex: 2; }
+.stock-row input[type=number] { flex: 0 0 90px; }
+.stock-row .stock-suffix { font-size:12px; color:var(--muted); flex: 0 0 auto; }
+.mini-btn { padding:4px 9px; font-size:12px; }
+.allow-other-label { font-size:12px; display:flex; align-items:center; gap:4px; color:var(--muted); }
+.site-tabs { display:flex; gap:8px; margin-bottom:18px; }
+.site-tab {
+  flex:1; text-align:center; padding:10px; border-radius:10px;
+  border:1px solid var(--navy); color:var(--navy); background:#fff; cursor:pointer; font-weight:600;
+}
+.site-tab.active { background:var(--navy); color:#fff; }
+.cafe-item-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; border-top:1px solid #eee; padding-top:8px; }
+.cafe-item-row:first-child { border-top:none; padding-top:0; }
+.cafe-item-row input[type=text] { flex:1.4; }
+.cafe-item-row input[type=text].category { flex:1; }
+.cafe-item-row input[type=number] { flex:0 0 80px; }
+.cafe-item-row label { flex:0 0 auto; font-size:12px; display:flex; align-items:center; gap:4px; }
+.upcoming-row { display:flex; gap:10px; align-items:baseline; border-top:1px solid #eee; padding:8px 0; font-size:13px; }
+.upcoming-row:first-child { border-top:none; }
+.upcoming-date { font-weight:600; flex:0 0 110px; }
+.forgot-link { display:inline-block; margin-top:10px; font-size:13px; cursor:pointer; color:var(--navy); text-decoration:underline; background:none; border:none; padding:0; }
+
+/* Small-screen layout: stack the dense admin rows instead of squeezing them horizontally */
+@media (max-width: 640px) {
+  .wrap { padding: 12px; }
+  .cafe-item-row, .stock-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .cafe-item-row input[type=text],
+  .cafe-item-row input[type=number],
+  .stock-row input[type=text],
+  .stock-row input[type=number] {
+    flex: 1 1 auto;
+    min-width: 90px;
+  }
+  .cafe-item-row label,
+  .cafe-item-row button,
+  .stock-row .stock-suffix,
+  .stock-row button {
+    flex: 0 0 auto;
+  }
+  .site-tabs { flex-direction: column; }
+  table.orders { display:block; overflow-x:auto; white-space:nowrap; }
+}
+</style>
+</head>
+<body>
+<div class="wrap" style="max-width:760px;">
+  <h1>The Outlook at Fox's — Admin</h1>
+  <div class="subtitle">Update stock, edit the menu, check today's orders, and manage both ordering sites from one place.</div>
+
+  <div id="login" class="admin-section">
+    <h2>Enter admin password</h2>
+    <div class="row">
+      <input type="text" id="pw" placeholder="Password">
+      <button class="secondary" onclick="login()">Log in</button>
+    </div>
+    <div id="loginError" class="error-text"></div>
+    <button class="forgot-link" onclick="forgotPassword(this)">Forgotten the password?</button>
+    <div id="forgotMsg" class="small" style="margin-top:6px;"></div>
+  </div>
+
+  <div id="resetPanel" class="admin-section" style="display:none;">
+    <h2>Set a new admin password</h2>
+    <div class="small" style="margin-bottom:10px;">This link was emailed to Torben's recovery address and is valid for 30 minutes.</div>
+    <div class="row">
+      <input type="text" id="newPw" placeholder="New password">
+      <button class="secondary" onclick="resetPassword()">Set password</button>
+    </div>
+    <div id="resetMsg" class="small" style="margin-top:6px;"></div>
+  </div>
+
+  <div id="panel" style="display:none;">
+
+    <div class="site-tabs">
+      <div class="site-tab active" id="tab-grabgo" onclick="switchSite('grabgo')">Grab &amp; Go — Fox's Staff</div>
+      <div class="site-tab" id="tab-onsite" onclick="switchSite('onsite')">On-Site Café — All Offices</div>
+    </div>
+
+    <div class="admin-section">
+      <h2 id="stockHeading">Today's stock</h2>
+      <div class="small" style="margin-bottom:10px;">Set how many of each you have today. Numbers go down automatically as orders come in — once something hits 0, it can no longer be selected, so you can't oversell.</div>
+      <div id="stockList"></div>
+      <button class="primary" onclick="saveMenu()">Save stock &amp; all changes</button>
+      <div id="saveMsgTop" class="small" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>Today's orders</h2>
+      <div class="row" style="margin-bottom:10px;" id="ordersActionsRow">
+        <button class="secondary" onclick="loadOrders()">Refresh</button>
+        <button class="secondary" id="sendNow1Btn" onclick="sendNow(1)">Send 10:30 email + ticket now</button>
+        <button class="secondary" id="sendNow2Btn" onclick="sendNow(2)">Send 13:00 email + ticket now</button>
+      </div>
+      <div id="ordersTable">Loading…</div>
+    </div>
+
+    <div class="admin-section" id="itemsSection">
+      <h2 id="itemsHeading">Menu items &amp; options</h2>
+      <div id="itemsList"></div>
+      <button class="secondary" id="addItemBtn" onclick="addItem()">+ Add new item</button>
+    </div>
+
+    <div class="admin-section">
+      <h2>Settings</h2>
+      <label class="field-label" id="openDaysLabel">Days this site is running</label>
+      <div id="openDaysRow" class="row" style="flex-wrap:wrap;"></div>
+
+      <div id="bundleSettings">
+        <label class="field-label">Order cutoff 1 (24hr, e.g. 09:15)</label>
+        <input type="text" id="cutoff1">
+        <label class="field-label">Collection time 1 (e.g. 10:30)</label>
+        <input type="text" id="collection1">
+        <label class="field-label">Order cutoff 2 (e.g. 11:15)</label>
+        <input type="text" id="cutoff2">
+        <label class="field-label">Collection time 2 (e.g. 13:00)</label>
+        <input type="text" id="collection2">
+        <label class="field-label">Order summary emails go to</label>
+        <input type="text" id="orderEmailTo">
+        <label class="allow-other-label" style="margin-top:8px; font-size:13px;">
+          <input type="checkbox" id="ccChef"> CC Simon (chef) — mr.simongomes@googlemail.com — on these emails
+        </label>
+        <label class="allow-other-label" style="margin-top:10px; font-size:13px;">
+          <input type="checkbox" id="deliveryEnabled"> Enable delivery option (in testing — leave off until ready for staff to see it)
+        </label>
+      </div>
+
+      <label class="field-label" id="lastOrderTimeLabel" style="display:none;">Last order time for same-day orders (24hr, e.g. 14:00 — leave blank for no cut-off)</label>
+      <input type="text" id="lastOrderTime" style="display:none;">
+      <label class="field-label">How many days ahead can people order? (e.g. 7)</label>
+      <input type="text" id="advanceDays">
+
+      <label class="field-label" id="noticeLabel">Notice shown at top of order page</label>
+      <textarea id="noticeText"></textarea>
+      <label class="field-label">Admin password (shared across both sites)</label>
+      <input type="text" id="adminPassword">
+      <div class="small" style="margin-top:6px;" id="settingsNote">Note: the two order-summary emails (and till tickets) always send at 09:30 and 11:30 — that's fixed. The cutoff/collection times above control which slots staff can pick, and can be changed any time.</div>
+    </div>
+
+    <div class="admin-section">
+      <h2>Upcoming orders (placed in advance)</h2>
+      <div class="small" style="margin-bottom:10px;">A heads-up on anything ordered ahead for a future day — nothing here needs approving, it's just so you're not surprised.</div>
+      <div id="upcomingList">Loading…</div>
+    </div>
+
+    <button class="primary" onclick="saveMenu()">Save all changes</button>
+    <div id="saveMsg" class="small" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<script>
+let adminPassword = sessionStorage.getItem('adminPassword') || '';
+let currentMenu = null;
+let currentSiteId = 'grabgo';
+
+function headers() {
+  return { 'Content-Type': 'application/json', 'x-admin-password': adminPassword };
+}
+
+async function login() {
+  const pw = document.getElementById('pw').value;
+  const res = await fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pw })
+  });
+  if (res.ok) {
+    adminPassword = pw;
+    sessionStorage.setItem('adminPassword', pw);
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
+    loadMenu();
+    loadOrders();
+  } else {
+    document.getElementById('loginError').textContent = 'Incorrect password';
+  }
+}
+
+function switchSite(siteId) {
+  currentSiteId = siteId;
+  document.getElementById('tab-grabgo').classList.toggle('active', siteId === 'grabgo');
+  document.getElementById('tab-onsite').classList.toggle('active', siteId === 'onsite');
+  loadMenu();
+  loadOrders();
+}
+
+function isCart() {
+  return currentMenu && currentMenu.type === 'cart';
+}
+
+async function loadMenu() {
+  const res = await fetch(`/api/admin/menu?site=${currentSiteId}`, { headers: headers() });
+  currentMenu = await res.json();
+  const s = currentMenu.settings;
+
+  // Toggle sections that only make sense for one site type
+  document.getElementById('bundleSettings').style.display = isCart() ? 'none' : 'block';
+  document.getElementById('sendNow1Btn').style.display = isCart() ? 'none' : 'inline-block';
+  document.getElementById('sendNow2Btn').style.display = isCart() ? 'none' : 'inline-block';
+  document.getElementById('stockHeading').textContent = isCart() ? "Today's menu & stock" : "Today's stock";
+  document.getElementById('itemsHeading').textContent = isCart() ? 'Menu items' : 'Menu items & options';
+  document.getElementById('addItemBtn').style.display = isCart() ? 'none' : 'inline-block';
+  document.getElementById('itemsSection').style.display = isCart() ? 'none' : 'block';
+  document.getElementById('openDaysLabel').textContent = isCart() ? 'Days the café menu is running' : 'Days Grab & Go is running';
+  document.getElementById('noticeLabel').textContent = isCart() ? 'Notice shown at top of café order page' : 'Notice shown to staff at top of order page';
+  document.getElementById('settingsNote').style.display = isCart() ? 'none' : 'block';
+
+  const allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const openDays = s.openDays || [];
+  document.getElementById('openDaysRow').innerHTML = allDays.map(day => `
+    <label class="allow-other-label" style="flex:0 0 auto; font-size:13px;">
+      <input type="checkbox" data-day="${day}" ${openDays.includes(day) ? 'checked' : ''}> ${day.slice(0, 3)}
+    </label>
+  `).join('');
+
+  if (!isCart()) {
+    document.getElementById('cutoff1').value = s.cutoff1;
+    document.getElementById('collection1').value = s.collection1;
+    document.getElementById('cutoff2').value = s.cutoff2;
+    document.getElementById('collection2').value = s.collection2;
+    document.getElementById('orderEmailTo').value = s.orderEmailTo;
+    document.getElementById('ccChef').checked = Boolean(s.ccChef);
+    document.getElementById('deliveryEnabled').checked = Boolean(s.deliveryEnabled);
+  }
+  document.getElementById('lastOrderTimeLabel').style.display = isCart() ? 'block' : 'none';
+  document.getElementById('lastOrderTime').style.display = isCart() ? 'block' : 'none';
+  if (isCart()) {
+    document.getElementById('lastOrderTime').value = s.lastOrderTime || '';
+  }
+  document.getElementById('advanceDays').value = (s.advanceDays === undefined || s.advanceDays === null) ? 7 : s.advanceDays;
+  document.getElementById('noticeText').value = s.noticeText;
+  document.getElementById('adminPassword').value = currentMenu.adminPassword || '';
+
+  if (isCart()) {
+    renderCafeStock();
+  } else {
+    renderStock();
+    renderItems();
+  }
+  loadUpcoming();
+}
+
+// ---------- Upcoming (advance) orders ----------
+
+async function loadUpcoming() {
+  const list = document.getElementById('upcomingList');
+  list.textContent = 'Loading…';
+  const res = await fetch(`/api/admin/upcoming-orders?site=${currentSiteId}`, { headers: headers() });
+  const data = await res.json();
+  if (!data.orders || data.orders.length === 0) {
+    list.innerHTML = '<div class="small">Nothing ordered ahead yet.</div>';
+    return;
+  }
+  list.innerHTML = data.orders.map(o => {
+    const desc = isCart()
+      ? (o.items || []).map(l => `${l.qty}x ${l.name}`).join(', ')
+      : `${o.itemName}${o.optionsText ? ' — ' + o.optionsText : ''}`;
+    return `
+      <div class="upcoming-row">
+        <span class="upcoming-date">${o.dateKey}</span>
+        <span>${o.name} — ${desc}${o.slot ? ' — ' + o.slot : ''}</span>
+      </div>`;
+  }).join('');
+}
+
+// ---------- Grab & Go: Today's stock (bundle-style, per-choice) ----------
+
+function renderStock() {
+  const list = document.getElementById('stockList');
+  list.innerHTML = currentMenu.items.map((item, itemIdx) => `
+    <div style="margin-bottom:10px;">
+      <div style="font-weight:600; margin-bottom:6px;">${item.name}</div>
+      ${(item.options || []).map((opt, optIdx) => `
+        <div class="stock-option">
+          <div class="stock-option-head">
+            <strong style="font-size:13px;">${opt.name}</strong>
+            <button class="secondary mini-btn" onclick="addChoice(${itemIdx}, ${optIdx})">+ Add choice</button>
+          </div>
+          ${(opt.choices || []).map((choice, choiceIdx) => `
+            <div class="stock-row" data-item="${itemIdx}" data-opt="${optIdx}" data-choice="${choiceIdx}">
+              <input type="text" data-field="label" value="${choice.label}">
+              <input type="number" data-field="stock" min="0" value="${choice.stock}">
+              <span class="stock-suffix">in stock</span>
+              <button class="secondary danger mini-btn" onclick="removeChoice(${itemIdx}, ${optIdx}, ${choiceIdx})">Remove</button>
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function syncStockIntoMenu() {
+  document.querySelectorAll('#stockList .stock-row').forEach(row => {
+    const i = parseInt(row.dataset.item, 10);
+    const o = parseInt(row.dataset.opt, 10);
+    const c = parseInt(row.dataset.choice, 10);
+    const choice = currentMenu.items[i].options[o].choices[c];
+    choice.label = row.querySelector('[data-field=label]').value;
+    choice.stock = parseInt(row.querySelector('[data-field=stock]').value, 10) || 0;
+  });
+}
+
+function addChoice(itemIdx, optIdx) {
+  syncStockIntoMenu();
+  currentMenu.items[itemIdx].options[optIdx].choices.push({ label: 'New choice', stock: 0 });
+  renderStock();
+}
+
+function removeChoice(itemIdx, optIdx, choiceIdx) {
+  syncStockIntoMenu();
+  currentMenu.items[itemIdx].options[optIdx].choices.splice(choiceIdx, 1);
+  renderStock();
+}
+
+// ---------- Grab & Go: Menu items (name, price, description, active, add/remove options) ----------
+
+function renderItems() {
+  const list = document.getElementById('itemsList');
+  list.innerHTML = currentMenu.items.map((item, idx) => `
+    <div class="admin-item" data-idx="${idx}">
+      <div class="row">
+        <input type="text" value="${item.name}" data-field="name" placeholder="Item name">
+        <input type="text" value="${item.price}" data-field="price" placeholder="Price" style="max-width:90px;">
+        <label style="flex:0 0 auto; display:flex; align-items:center; gap:4px; font-size:13px;">
+          <input type="checkbox" data-field="active" ${item.active ? 'checked' : ''}> Active
+        </label>
+      </div>
+      <input type="text" value="${item.description || ''}" data-field="description" placeholder="Description" style="margin-bottom:6px;">
+      <div class="small">Option categories on this item: ${(item.options || []).map(o => o.name).join(', ') || 'none'}. To rename a category or toggle whether staff can type "Other", edit below.</div>
+      ${(item.options || []).map((opt, optIdx) => `
+        <div class="row" style="margin-top:6px;">
+          <input type="text" data-opt-name="${optIdx}" value="${opt.name}" placeholder="Option category name">
+          <label class="allow-other-label" style="flex:0 0 auto;">
+            <input type="checkbox" data-opt-other="${optIdx}" ${opt.allowOther ? 'checked' : ''}> Allow "Other"
+          </label>
+        </div>
+      `).join('')}
+      <div style="margin-top:8px;">
+        <button class="secondary" onclick="addOption(${idx})">+ Add option category</button>
+        <button class="secondary danger" onclick="removeItem(${idx})">Remove item</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addItem() {
+  syncStockIntoMenu();
+  currentMenu.items.push({ id: 'item-' + Date.now(), name: 'New item', description: '', price: 0, options: [], active: true });
+  renderStock();
+  renderItems();
+}
+
+function removeItem(idx) {
+  syncStockIntoMenu();
+  currentMenu.items.splice(idx, 1);
+  renderStock();
+  renderItems();
+}
+
+function addOption(itemIdx) {
+  collectItemsFromForm();
+  currentMenu.items[itemIdx].options.push({ name: 'New option', allowOther: false, choices: [] });
+  renderStock();
+  renderItems();
+}
+
+function collectItemsFromForm() {
+  syncStockIntoMenu();
+  document.querySelectorAll('.admin-item').forEach(el => {
+    const idx = parseInt(el.dataset.idx, 10);
+    const item = currentMenu.items[idx];
+    item.name = el.querySelector('[data-field=name]').value;
+    item.price = parseFloat(el.querySelector('[data-field=price]').value) || 0;
+    item.active = el.querySelector('[data-field=active]').checked;
+    item.description = el.querySelector('[data-field=description]').value;
+    el.querySelectorAll('[data-opt-name]').forEach(input => {
+      const optIdx = parseInt(input.dataset.optName, 10);
+      item.options[optIdx].name = input.value;
+    });
+    el.querySelectorAll('[data-opt-other]').forEach(input => {
+      const optIdx = parseInt(input.dataset.optOther, 10);
+      item.options[optIdx].allowOther = input.checked;
+    });
+  });
+}
+
+// ---------- On-Site Café: flat item list (name, category, price, stock, active) ----------
+
+function renderCafeStock() {
+  const list = document.getElementById('stockList');
+  list.innerHTML = `
+    <div class="cafe-item-row" style="font-size:12px; color:var(--muted); font-weight:600;">
+      <span style="flex:1;">Name</span>
+      <span style="flex:1;">Category</span>
+      <span style="flex:0 0 80px;">Price £</span>
+      <span style="flex:0 0 80px;">Stock</span>
+      <span style="flex:0 0 auto;">Active</span>
+      <span style="flex:0 0 auto;"></span>
+    </div>
+    ${currentMenu.items.map((item, idx) => `
+      <div class="cafe-item-row" data-idx="${idx}">
+        <input type="text" class="name" data-field="name" value="${item.name}">
+        <input type="text" class="category" data-field="category" value="${item.category || ''}">
+        <input type="number" step="0.01" min="0" data-field="price" value="${item.price}">
+        <input type="number" min="0" data-field="stock" value="${item.stock}">
+        <label><input type="checkbox" data-field="active" ${item.active ? 'checked' : ''}> Active</label>
+        <button class="secondary danger mini-btn" onclick="removeCafeItem(${idx})">Remove</button>
+      </div>
+    `).join('')}
+    <button class="secondary" style="margin-top:10px;" onclick="addCafeItem()">+ Add new item</button>
+  `;
+}
+
+function syncCafeItemsFromForm() {
+  document.querySelectorAll('#stockList .cafe-item-row[data-idx]').forEach(row => {
+    const idx = parseInt(row.dataset.idx, 10);
+    const item = currentMenu.items[idx];
+    item.name = row.querySelector('[data-field=name]').value;
+    item.category = row.querySelector('[data-field=category]').value;
+    item.price = parseFloat(row.querySelector('[data-field=price]').value) || 0;
+    item.stock = parseInt(row.querySelector('[data-field=stock]').value, 10) || 0;
+    item.active = row.querySelector('[data-field=active]').checked;
+  });
+}
+
+function addCafeItem() {
+  syncCafeItemsFromForm();
+  currentMenu.items.push({ id: 'item-' + Date.now(), name: 'New item', category: 'Food', price: 0, stock: 0, active: true });
+  renderCafeStock();
+}
+
+function removeCafeItem(idx) {
+  syncCafeItemsFromForm();
+  currentMenu.items.splice(idx, 1);
+  renderCafeStock();
+}
+
+// ---------- Save (shared) ----------
+
+async function saveMenu() {
+  if (isCart()) {
+    syncCafeItemsFromForm();
+  } else {
+    collectItemsFromForm();
+  }
+  currentMenu.settings.openDays = Array.from(document.querySelectorAll('#openDaysRow input[data-day]:checked')).map(el => el.dataset.day);
+  if (!isCart()) {
+    currentMenu.settings.cutoff1 = document.getElementById('cutoff1').value;
+    currentMenu.settings.collection1 = document.getElementById('collection1').value;
+    currentMenu.settings.cutoff2 = document.getElementById('cutoff2').value;
+    currentMenu.settings.collection2 = document.getElementById('collection2').value;
+    currentMenu.settings.orderEmailTo = document.getElementById('orderEmailTo').value;
+    currentMenu.settings.ccChef = document.getElementById('ccChef').checked;
+    currentMenu.settings.deliveryEnabled = document.getElementById('deliveryEnabled').checked;
+  } else {
+    currentMenu.settings.lastOrderTime = document.getElementById('lastOrderTime').value;
+  }
+  currentMenu.settings.advanceDays = parseInt(document.getElementById('advanceDays').value, 10) || 7;
+  currentMenu.settings.noticeText = document.getElementById('noticeText').value;
+  currentMenu.adminPassword = document.getElementById('adminPassword').value;
+
+  const res = await fetch(`/api/admin/menu?site=${currentSiteId}`, {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(currentMenu)
+  });
+  const msg = 'Saved ✅ ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const failMsg = 'Save failed — check password.';
+  if (res.ok) {
+    adminPassword = currentMenu.adminPassword;
+    sessionStorage.setItem('adminPassword', adminPassword);
+    document.getElementById('saveMsg').textContent = msg;
+    document.getElementById('saveMsgTop').textContent = msg;
+    loadMenu();
+  } else {
+    document.getElementById('saveMsg').textContent = failMsg;
+    document.getElementById('saveMsgTop').textContent = failMsg;
+  }
+}
+
+// ---------- Orders ----------
+
+async function loadOrders() {
+  const res = await fetch(`/api/admin/orders?site=${currentSiteId}`, { headers: headers() });
+  const data = await res.json();
+  const table = document.getElementById('ordersTable');
+  if (!data.orders || data.orders.length === 0) {
+    table.innerHTML = '<div class="small">No orders yet today.</div>';
+    return;
+  }
+  if (isCart()) {
+    table.innerHTML = `
+      <table class="orders">
+        <thead><tr><th>Time</th><th>Name</th><th>Mobile</th><th>Email</th><th>Items</th><th>Total</th></tr></thead>
+        <tbody>
+          ${data.orders.map(o => `
+            <tr>
+              <td>${new Date(o.placedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</td>
+              <td>${o.name}</td>
+              <td>${o.mobile || ''}</td>
+              <td>${o.email || ''}</td>
+              <td>${(o.items || []).map(l => `${l.qty}x ${l.name}`).join(', ')}</td>
+              <td>£${(o.totalPrice || 0).toFixed(2)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    return;
+  }
+  table.innerHTML = `
+    <table class="orders">
+      <thead><tr><th>Time</th><th>Name</th><th>Mobile</th><th>Email</th><th>Item</th><th>Options</th><th>Slot</th><th>Fulfilment</th></tr></thead>
+      <tbody>
+        ${data.orders.map(o => `
+          <tr>
+            <td>${new Date(o.placedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</td>
+            <td>${o.name}</td>
+            <td>${o.mobile || ''}</td>
+            <td>${o.email || ''}</td>
+            <td>${o.itemName}</td>
+            <td>${o.optionsText}</td>
+            <td><span class="tag">${o.slot}</span></td>
+            <td>${o.fulfilment === 'delivery' ? `<span class="tag" style="background:#e8f3e8;">Delivery: ${o.deliveryAddress}</span>` : 'Collection'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function sendNow(which) {
+  const slot = which === 1 ? currentMenu.settings.collection1 : currentMenu.settings.collection2;
+  const res = await fetch('/api/admin/send-summary', {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ slot })
+  });
+  const data = await res.json();
+  let msg = data.dryRun
+    ? 'No email account connected yet — here is what would be sent:\n\n' + data.text
+    : 'Email sent to front of house inbox.';
+  if (data.ticket && data.ticket.attempted) {
+    msg += data.ticket.sent
+      ? '\n\nTill ticket: sent to Square — should print automatically if the printer profile is set to auto-print online/kiosk orders.'
+      : '\n\nTill ticket: FAILED — ' + data.ticket.error;
+  } else if (!data.dryRun) {
+    msg += '\n\n(Square not connected yet, so no till ticket was sent.)';
+  }
+  alert(msg);
+}
+
+// ---------- Forgotten password ----------
+
+async function forgotPassword(btn) {
+  btn.disabled = true;
+  const msg = document.getElementById('forgotMsg');
+  msg.textContent = 'Sending…';
+  try {
+    const res = await fetch('/api/admin/forgot-password', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      msg.textContent = data.dryRun
+        ? 'No email account connected yet — check the server console for the reset link.'
+        : 'A reset link has been emailed to Torben\'s recovery address. Check that inbox.';
+    } else {
+      msg.textContent = data.error || 'Something went wrong — try again.';
+    }
+  } catch (e) {
+    msg.textContent = 'Could not reach the server — try again.';
+  }
+  btn.disabled = false;
+}
+
+async function resetPassword() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('reset');
+  const newPassword = document.getElementById('newPw').value;
+  const msg = document.getElementById('resetMsg');
+  const res = await fetch('/api/admin/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, newPassword })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    msg.textContent = 'Password set — log in below with your new password.';
+    setTimeout(() => { window.location.href = '/admin.html'; }, 1500);
+  } else {
+    msg.textContent = data.error || 'Something went wrong.';
+  }
+}
+
+const resetTokenInUrl = new URLSearchParams(window.location.search).get('reset');
+if (resetTokenInUrl) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('resetPanel').style.display = 'block';
+} else if (adminPassword) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('panel').style.display = 'block';
+  loadMenu();
+  loadOrders();
+}
+</script>
+</body>
+</html>

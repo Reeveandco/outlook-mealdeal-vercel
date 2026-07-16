@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>On-Site Café Menu — The Outlook at Fox's</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  #card-container { margin: 8px 0 4px; padding: 10px; border: 1px solid #ccc7b8; border-radius: 8px; background: #fff; min-height: 40px; }
+  .sandbox-flag { background: #fff4d6; border: 1px solid #e0c46a; border-radius: 8px; padding: 8px 12px; font-size: 12px; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand-header">
+    <div class="brand-logo" title="The Outlook at Fox's"><img src="logo-outlook.png" alt="The Outlook at Fox's"></div>
+  </div>
+  <div class="brand-title">
+    <h1>On-Site Café Menu</h1>
+    <div class="subtitle">The Outlook at Fox's — order ahead, collect from The Outlook</div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+  <div id="sandboxFlag"></div>
+  <div id="content">Loading menu…</div>
+
+  <div class="brand-footer">
+    <strong>The Outlook at Fox's</strong><br>
+    Fox's Marina &amp; Boatyard, The Strand, Ipswich, Suffolk, IP2 8NJ<br>
+    <a href="tel:07346149142">07346 149142</a> &nbsp;·&nbsp; <a href="mailto:theoutlookatfoxs@gmail.com">theoutlookatfoxs@gmail.com</a>
+    <div class="footer-brands">
+      <span>The Outlook at Fox's — theoutlookatfoxs.com</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+const SITE = 'onsite';
+let menu = null;
+let squareConfig = null;
+let card = null;
+let basket = {}; // itemId -> qty
+let selectedForDate = null;
+
+function formatDateLabel(d) {
+  if (d.isToday) return 'Today';
+  const dt = new Date(d.dateKey + 'T00:00:00Z');
+  const isTomorrow = (() => {
+    const t = new Date(); t.setDate(t.getDate() + 1);
+    return t.toISOString().slice(0, 10) === d.dateKey;
+  })();
+  if (isTomorrow) return 'Tomorrow';
+  return dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+async function init() {
+  const [menuRes, squareRes] = await Promise.all([
+    fetch(`${API}/api/menu?site=${SITE}`),
+    fetch(`${API}/api/square-config`)
+  ]);
+  menu = await menuRes.json();
+  squareConfig = await squareRes.json();
+
+  if (squareConfig.environment === 'sandbox') {
+    document.getElementById('sandboxFlag').innerHTML =
+      '<div class="sandbox-flag">TEST MODE — payments go through Square Sandbox, no real money is taken.</div>';
+  }
+
+  render();
+
+  if (menu.ordersOpen && squareConfig.configured) {
+    try {
+      await loadSquareScript(squareConfig.environment);
+      await initializeCard();
+    } catch (e) {
+      const err = document.getElementById('errorText');
+      if (err) err.textContent = 'Could not load payment form — please refresh.';
+    }
+  }
+}
+
+function loadSquareScript(env) {
+  return new Promise((resolve, reject) => {
+    const src = env === 'production'
+      ? 'https://web.squarecdn.com/v1/square.js'
+      : 'https://sandbox.web.squarecdn.com/v1/square.js';
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+async function initializeCard() {
+  const payments = window.Square.payments(squareConfig.applicationId, squareConfig.locationId);
+  card = await payments.card();
+  await card.attach('#card-container');
+}
+
+function categoryOrder(items) {
+  const seen = [];
+  items.forEach(i => { if (!seen.includes(i.category)) seen.push(i.category); });
+  return seen;
+}
+
+function render() {
+  document.getElementById('notice').textContent = menu.noticeText || '';
+  const content = document.getElementById('content');
+
+  if (!menu.ordersOpen) {
+    content.innerHTML = `
+      <div class="closed">
+        <strong>The on-site café menu isn't taking orders right now.</strong><br>
+        Please check back shortly, or call ${'07346 149142'} to order directly.
+      </div>`;
+    return;
+  }
+
+  const categories = categoryOrder(menu.items);
+  const itemsHtml = categories.map(cat => `
+    <div class="category-heading">${cat}</div>
+    ${menu.items.filter(i => i.category === cat).map(item => `
+      <div class="cart-item ${item.stock <= 0 ? 'sold-out' : ''}" data-id="${item.id}" data-stock="${item.stock}" data-price="${item.price}">
+        <div class="cart-item-info">
+          <div class="cart-item-name">${item.name}</div>
+          <div class="cart-item-meta">£${item.price.toFixed(2)} · ${item.stock <= 0 ? 'sold out' : item.stock + ' left today'}</div>
+        </div>
+        <div class="qty-stepper">
+          <button class="qty-btn" onclick="changeQty('${item.id}', -1)" ${item.stock <= 0 ? 'disabled' : ''}>&minus;</button>
+          <span class="qty-value" id="qty-${item.id}">0</span>
+          <button class="qty-btn" onclick="changeQty('${item.id}', 1)" ${item.stock <= 0 ? 'disabled' : ''}>+</button>
+        </div>
+      </div>
+    `).join('')}
+  `).join('');
+
+  const payLabel = squareConfig.configured ? 'Pay & place order' : 'Place order';
+  const cardSection = squareConfig.configured ? `
+    <label class="field-label">Card details</label>
+    <div id="card-container">Loading payment form…</div>
+  ` : '';
+
+  if (!selectedForDate) {
+    selectedForDate = menu.todayKey;
+  }
+  const isTodaySelected = selectedForDate === menu.todayKey;
+  const dateButtonsHtml = (menu.forDates || []).map(d => `
+    <div class="slot-btn ${selectedForDate === d.dateKey ? 'selected' : ''}" data-date="${d.dateKey}" onclick="selectForDate('${d.dateKey}')">${formatDateLabel(d)}</div>
+  `).join('');
+
+  const paymentNote = squareConfig.configured
+    ? (isTodaySelected
+        ? 'Card payment is taken now, at the point of ordering. Your ticket prints straight away.'
+        : 'Card payment is taken now. Since this is for a future day, your ticket will print that morning, ready for collection.')
+    : 'Payment is taken at collection (card or cash) — online payment coming soon.';
+
+  const lastOrder = getLastOrder();
+  const repeatBannerHtml = lastOrder ? `
+    <div class="small" style="background:#eef4ee; border-radius:8px; padding:8px 12px; margin-bottom:10px;">
+      Ordered before? <button type="button" class="secondary mini-btn" style="padding:3px 10px; font-size:12px;" onclick="repeatLastOrder()">Repeat my last order</button>
+      — just pick a day below and confirm.
+    </div>` : '';
+
+  content.innerHTML = `
+    ${repeatBannerHtml}
+    ${itemsHtml}
+
+    <div class="basket-bar">
+      <span>Basket total</span>
+      <span id="basketTotal">£0.00</span>
+    </div>
+
+    <label class="field-label">Which day is this for?</label>
+    <div class="slot-options" id="dateOptions">${dateButtonsHtml}</div>
+
+    <label class="field-label">Your name</label>
+    <input type="text" id="nameInput" placeholder="e.g. Dave Smith">
+
+    <label class="field-label">Email</label>
+    <input type="text" id="emailInput" placeholder="e.g. dave@example.com">
+
+    <label class="field-label">Mobile (optional)</label>
+    <input type="text" id="mobileInput" placeholder="e.g. 07700 900000">
+
+    ${cardSection}
+
+    <button class="primary" id="submitBtn" onclick="submitOrder()">${payLabel}</button>
+    <div id="errorText" class="error-text"></div>
+    <div class="small" style="margin-top:14px;">${paymentNote}</div>
+  `;
+}
+
+function changeQty(itemId, delta) {
+  const el = document.querySelector(`.cart-item[data-id="${itemId}"]`);
+  const stock = parseInt(el.dataset.stock, 10);
+  const current = basket[itemId] || 0;
+  const next = Math.max(0, Math.min(stock, current + delta));
+  basket[itemId] = next;
+  document.getElementById(`qty-${itemId}`).textContent = next;
+  updateTotal();
+}
+
+// ---------- "Repeat my last order" convenience shortcut (this device only) ----------
+
+function getLastOrder() {
+  try {
+    const raw = localStorage.getItem('onsite_lastOrder');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function saveLastOrder(data) {
+  try { localStorage.setItem('onsite_lastOrder', JSON.stringify(data)); } catch (e) { /* ignore */ }
+}
+
+function repeatLastOrder() {
+  const last = getLastOrder();
+  if (!last) return;
+  (last.items || []).forEach(line => {
+    const el = document.querySelector(`.cart-item[data-id="${line.itemId}"]`);
+    if (!el) return; // item no longer on the menu
+    const stock = parseInt(el.dataset.stock, 10);
+    const qty = Math.max(0, Math.min(stock, line.qty));
+    basket[line.itemId] = qty;
+    const qtyEl = document.getElementById(`qty-${line.itemId}`);
+    if (qtyEl) qtyEl.textContent = qty;
+  });
+  updateTotal();
+  document.getElementById('nameInput').value = last.name || '';
+  document.getElementById('emailInput').value = last.email || '';
+  document.getElementById('mobileInput').value = last.mobile || '';
+}
+
+function selectForDate(dateKey) {
+  selectedForDate = dateKey;
+  document.querySelectorAll('#dateOptions .slot-btn').forEach(el => {
+    el.classList.toggle('selected', el.dataset.date === dateKey);
+  });
+}
+
+function updateTotal() {
+  let total = 0;
+  Object.entries(basket).forEach(([itemId, qty]) => {
+    if (qty <= 0) return;
+    const el = document.querySelector(`.cart-item[data-id="${itemId}"]`);
+    const price = parseFloat(el.dataset.price);
+    total += price * qty;
+  });
+  document.getElementById('basketTotal').textContent = `£${total.toFixed(2)}`;
+}
+
+async function submitOrder() {
+  const errorEl = document.getElementById('errorText');
+  errorEl.textContent = '';
+  const name = document.getElementById('nameInput').value;
+  const email = document.getElementById('emailInput').value;
+  const mobile = document.getElementById('mobileInput').value;
+
+  const items = Object.entries(basket)
+    .filter(([, qty]) => qty > 0)
+    .map(([itemId, qty]) => ({ itemId, qty }));
+
+  if (items.length === 0) { errorEl.textContent = 'Please add at least one item to your basket.'; return; }
+  if (!selectedForDate) { errorEl.textContent = 'Please choose which day this is for.'; return; }
+  if (!name.trim()) { errorEl.textContent = 'Please enter your name.'; return; }
+  if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())) { errorEl.textContent = 'Please enter a valid email.'; return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+
+  let sourceId = null;
+  if (squareConfig.configured) {
+    if (!card) { errorEl.textContent = 'Payment form is still loading — please wait a moment and try again.'; btn.disabled = false; return; }
+    btn.textContent = 'Processing card…';
+    const tokenResult = await card.tokenize();
+    if (tokenResult.status !== 'OK') {
+      errorEl.textContent = (tokenResult.errors && tokenResult.errors[0] && tokenResult.errors[0].message) || 'Card details could not be verified.';
+      btn.disabled = false;
+      btn.textContent = 'Pay & place order';
+      return;
+    }
+    sourceId = tokenResult.token;
+  }
+
+  btn.textContent = 'Placing order…';
+
+  try {
+    const res = await fetch(`${API}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: SITE, name, email, mobile, items, sourceId, forDate: selectedForDate })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Something went wrong — please try again.';
+      btn.disabled = false;
+      btn.textContent = squareConfig.configured ? 'Pay & place order' : 'Place order';
+      return;
+    }
+    saveLastOrder({ items, name, email, mobile });
+    const paidLine = data.order.status === 'paid'
+      ? `<br>Payment received${data.order.paymentEnvironment === 'sandbox' ? ' (test payment)' : ''} ✅`
+      : '';
+    const lines = (data.order.items || []).map(l => `${l.qty}x ${l.name}`).join('<br>');
+    const isForToday = data.order.dateKey === menu.todayKey;
+    const dateLine = isForToday ? '' : `<br>For: <strong>${data.order.dateKey}</strong>`;
+    let ticketLine = '';
+    if (data.ticket && data.ticket.sent) {
+      ticketLine = '<br>Your order has been sent to the till ✅';
+    } else if (data.ticket && data.ticket.deferred) {
+      ticketLine = `<br>This is for ${data.ticket.forDate} — it'll print on the till that morning, ready for collection.`;
+    }
+    const collectLine = isForToday ? 'Thanks — see you shortly!' : 'Thanks — see you then!';
+    document.getElementById('content').innerHTML = `
+      <div class="confirmation">
+        <strong>Order placed ✅</strong><br><br>
+        ${lines}<br><br>
+        Total: <strong>£${data.order.totalPrice.toFixed(2)}</strong><br>
+        Name: ${data.order.name}${dateLine}${paidLine}${ticketLine}<br><br>
+        ${collectLine}
+      </div>`;
+  } catch (e) {
+    errorEl.textContent = 'Could not reach the server — please try again.';
+    btn.disabled = false;
+    btn.textContent = squareConfig.configured ? 'Pay & place order' : 'Place order';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

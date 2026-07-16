@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grab &amp; Go — The Outlook at Fox's</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  #card-container { margin: 8px 0 4px; padding: 10px; border: 1px solid #ccc7b8; border-radius: 8px; background: #fff; min-height: 40px; }
+  .sandbox-flag { background: #fff4d6; border: 1px solid #e0c46a; border-radius: 8px; padding: 8px 12px; font-size: 12px; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="staff-flag">Fox's Marina &amp; Boatyard staff only</div>
+  <div class="brand-header">
+    <div class="brand-logo" title="The Outlook at Fox's"><img src="logo-outlook.png" alt="The Outlook at Fox's"></div>
+    <span class="brand-x">&times;</span>
+    <div class="brand-logo wordmark" title="Fox's Marina &amp; Boatyard"><img src="logo-foxsmarina.png" alt="Fox's Marina &amp; Boatyard"></div>
+  </div>
+  <div class="brand-title">
+    <h1>Grab &amp; Go</h1>
+    <div class="subtitle">by The Outlook at Fox's, for Fox's Marina &amp; Boatyard staff</div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+  <div id="sandboxFlag"></div>
+  <div id="content">Loading menu…</div>
+
+  <div class="brand-footer">
+    <strong>The Outlook at Fox's</strong><br>
+    Fox's Marina &amp; Boatyard, The Strand, Ipswich, Suffolk, IP2 8NJ<br>
+    <a href="tel:07346149142">07346 149142</a> &nbsp;·&nbsp; <a href="mailto:theoutlookatfoxs@gmail.com">theoutlookatfoxs@gmail.com</a>
+    <div class="footer-brands">
+      <span>The Outlook at Fox's — theoutlookatfoxs.com</span>
+      <span>Fox's Marina &amp; Boatyard — foxsmarina.com</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let menu = null;
+let squareConfig = null;
+let card = null;
+let selectedItemId = null;
+let selectedSlot = null;
+let selectedFulfilment = 'collection';
+let selectedForDate = null;
+
+function formatDateLabel(d) {
+  if (d.isToday) return 'Today';
+  const dt = new Date(d.dateKey + 'T00:00:00Z');
+  const isTomorrow = (() => {
+    const t = new Date(); t.setDate(t.getDate() + 1);
+    return t.toISOString().slice(0, 10) === d.dateKey;
+  })();
+  if (isTomorrow) return 'Tomorrow';
+  return dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+function slotsForDate(dateKey) {
+  return dateKey === menu.todayKey ? (menu.availableSlots || []) : (menu.futureSlots || []);
+}
+
+async function init() {
+  const [menuRes, squareRes] = await Promise.all([
+    fetch(`${API}/api/menu`),
+    fetch(`${API}/api/square-config`)
+  ]);
+  menu = await menuRes.json();
+  squareConfig = await squareRes.json();
+
+  if (squareConfig.environment === 'sandbox') {
+    document.getElementById('sandboxFlag').innerHTML =
+      '<div class="sandbox-flag">TEST MODE — payments go through Square Sandbox, no real money is taken.</div>';
+  }
+
+  render();
+
+  if (menu.ordersOpen && squareConfig.configured) {
+    try {
+      await loadSquareScript(squareConfig.environment);
+      await initializeCard();
+    } catch (e) {
+      document.getElementById('errorText').textContent = 'Could not load payment form — please refresh.';
+    }
+  }
+}
+
+function loadSquareScript(env) {
+  return new Promise((resolve, reject) => {
+    const src = env === 'production'
+      ? 'https://web.squarecdn.com/v1/square.js'
+      : 'https://sandbox.web.squarecdn.com/v1/square.js';
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+async function initializeCard() {
+  const payments = window.Square.payments(squareConfig.applicationId, squareConfig.locationId);
+  card = await payments.card();
+  await card.attach('#card-container');
+}
+
+function render() {
+  document.getElementById('notice').textContent = menu.noticeText || '';
+  const content = document.getElementById('content');
+
+  if (!menu.ordersOpen) {
+    const daysList = (menu.openDays || []).join(', ');
+    content.innerHTML = menu.isOpenToday
+      ? `
+      <div class="closed">
+        <strong>Ordering is closed for today.</strong><br>
+        Orders before ${menu.cutoff1} can collect at ${menu.collection1} or ${menu.collection2}.<br>
+        Orders before ${menu.cutoff2} can collect at ${menu.collection2}.<br>
+        Come back on the next open day to order again.
+      </div>`
+      : `
+      <div class="closed">
+        <strong>Grab &amp; Go isn't running today.</strong><br>
+        We take orders on ${daysList} only.<br>
+        Come back then to order.
+      </div>`;
+    return;
+  }
+
+  const itemsHtml = menu.items.map(item => `
+    <div class="item-card" data-id="${item.id}" onclick="selectItem('${item.id}')">
+      <span class="item-price">£${item.price.toFixed(2)}</span>
+      <div class="item-name">${item.name}</div>
+      <div class="item-desc">${item.description || ''}</div>
+      <div class="options" id="options-${item.id}">
+        <div class="stock-hint" style="margin-bottom:6px;">Numbers shown are what's left today.</div>
+        ${(item.options || []).map(opt => `
+          <label>${opt.name}</label>
+          <select data-option="${opt.name}" onchange="handleOptionChange(this)">
+            <option value="" disabled selected>Please choose…</option>
+            ${opt.choices.map(c => `<option value="${c.label}" ${c.stock <= 0 ? 'disabled' : ''}>${c.label} — ${c.stock <= 0 ? 'sold out' : c.stock + ' left'}</option>`).join('')}
+            ${opt.allowOther ? '<option value="Other">Other (please specify)</option>' : ''}
+          </select>
+          ${opt.allowOther ? `<input type="text" data-other-for="${opt.name}" placeholder="Please specify" style="display:none; margin-top:6px;">` : ''}
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  if (!selectedForDate) {
+    selectedForDate = menu.todayKey;
+  }
+
+  const dateButtonsHtml = (menu.forDates || []).map(d => `
+    <div class="slot-btn ${selectedForDate === d.dateKey ? 'selected' : ''}" data-date="${d.dateKey}" onclick="selectForDate('${d.dateKey}')">${formatDateLabel(d)}</div>
+  `).join('');
+
+  const slotsHtml = slotsForDate(selectedForDate).map(s => `
+    <div class="slot-btn" data-slot="${s}" onclick="selectSlot('${s}')">${s}</div>
+  `).join('');
+
+  const payLabel = squareConfig.configured ? 'Pay & place order' : 'Place order';
+  const cardSection = squareConfig.configured ? `
+    <label class="field-label">Card details</label>
+    <div id="card-container">Loading payment form…</div>
+  ` : '';
+  const paymentNote = squareConfig.configured
+    ? 'Card payment is taken now, at the point of ordering.'
+    : 'Payment is taken at collection (card or cash) — online payment coming soon.';
+
+  const fulfilmentHtml = menu.deliveryEnabled ? `
+    <label class="field-label">Collection or delivery?</label>
+    <div class="slot-options">
+      <div class="slot-btn ${selectedFulfilment === 'collection' ? 'selected' : ''}" data-fulfilment="collection" onclick="selectFulfilment('collection')">Collection</div>
+      <div class="slot-btn ${selectedFulfilment === 'delivery' ? 'selected' : ''}" data-fulfilment="delivery" onclick="selectFulfilment('delivery')">Delivery</div>
+    </div>
+    <div id="deliveryAddressField" style="display:${selectedFulfilment === 'delivery' ? 'block' : 'none'};">
+      <label class="field-label">Delivery to</label>
+      <input type="text" id="deliveryAddressInput" placeholder="e.g. clocking-in machine, Reeve &amp; Co office">
+    </div>
+  ` : `
+    <div class="small" style="margin: 10px 0 4px;">Collection only — delivery option coming soon.</div>
+  `;
+
+  const lastOrder = getLastOrder();
+  const repeatBannerHtml = lastOrder ? `
+    <div class="small" style="background:#eef4ee; border-radius:8px; padding:8px 12px; margin-bottom:10px;">
+      Ordered before? <button type="button" class="secondary mini-btn" style="padding:3px 10px; font-size:12px;" onclick="repeatLastOrder()">Repeat my last order</button>
+      — just pick a day below and confirm.
+    </div>` : '';
+
+  content.innerHTML = `
+    ${repeatBannerHtml}
+    ${itemsHtml}
+    <label class="field-label">Which day is this for?</label>
+    <div class="slot-options" id="dateOptions">${dateButtonsHtml}</div>
+
+    <label class="field-label">Collection time</label>
+    <div class="slot-options" id="slotOptions">${slotsHtml}</div>
+
+    ${fulfilmentHtml}
+
+    <label class="field-label">Your name</label>
+    <input type="text" id="nameInput" placeholder="e.g. Dave Smith">
+
+    <label class="field-label">Mobile</label>
+    <input type="text" id="mobileInput" placeholder="e.g. 07700 900000">
+
+    <label class="field-label">Email</label>
+    <input type="text" id="emailInput" placeholder="e.g. dave@example.com">
+
+    ${cardSection}
+
+    <button class="primary" id="submitBtn" onclick="submitOrder()">${payLabel}</button>
+    <div id="errorText" class="error-text"></div>
+    <div class="small" style="margin-top:14px;">${paymentNote}</div>
+  `;
+}
+
+function handleOptionChange(selectEl) {
+  const card = selectEl.closest('.item-card');
+  const otherInput = card.querySelector(`input[data-other-for="${selectEl.dataset.option}"]`);
+  if (!otherInput) return;
+  if (selectEl.value === 'Other') {
+    otherInput.style.display = 'block';
+  } else {
+    otherInput.style.display = 'none';
+    otherInput.value = '';
+  }
+}
+
+// ---------- "Repeat my last order" convenience shortcut (this device only, not a subscription) ----------
+
+function getLastOrder() {
+  try {
+    const raw = localStorage.getItem('grabgo_lastOrder');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function saveLastOrder(data) {
+  try { localStorage.setItem('grabgo_lastOrder', JSON.stringify(data)); } catch (e) { /* ignore */ }
+}
+
+function repeatLastOrder() {
+  const last = getLastOrder();
+  if (!last) return;
+  if (!menu.items.some(i => i.id === last.itemId)) return; // item no longer on the menu
+  selectItem(last.itemId);
+  const itemCard = document.querySelector(`.item-card[data-id="${last.itemId}"]`);
+  itemCard.querySelectorAll('select[data-option]').forEach(sel => {
+    const val = last.options && last.options[sel.dataset.option];
+    if (!val) return;
+    const matches = Array.from(sel.options).some(o => o.value === val);
+    sel.value = matches ? val : 'Other';
+    if (sel.value === 'Other') {
+      const otherInput = itemCard.querySelector(`input[data-other-for="${sel.dataset.option}"]`);
+      if (otherInput) { otherInput.style.display = 'block'; otherInput.value = val; }
+    }
+  });
+  document.getElementById('nameInput').value = last.name || '';
+  document.getElementById('mobileInput').value = last.mobile || '';
+  document.getElementById('emailInput').value = last.email || '';
+  if (menu.deliveryEnabled && last.fulfilment) {
+    selectFulfilment(last.fulfilment);
+    if (last.fulfilment === 'delivery' && last.deliveryAddress) {
+      const addressInput = document.getElementById('deliveryAddressInput');
+      if (addressInput) addressInput.value = last.deliveryAddress;
+    }
+  }
+  itemCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function selectItem(id) {
+  selectedItemId = id;
+  document.querySelectorAll('.item-card').forEach(el => {
+    el.classList.toggle('selected', el.dataset.id === id);
+  });
+}
+
+function selectForDate(dateKey) {
+  selectedForDate = dateKey;
+  selectedSlot = null;
+  document.querySelectorAll('#dateOptions .slot-btn').forEach(el => {
+    el.classList.toggle('selected', el.dataset.date === dateKey);
+  });
+  const slotOptions = document.getElementById('slotOptions');
+  if (slotOptions) {
+    slotOptions.innerHTML = slotsForDate(dateKey).map(s => `
+      <div class="slot-btn" data-slot="${s}" onclick="selectSlot('${s}')">${s}</div>
+    `).join('');
+  }
+}
+
+function selectSlot(slot) {
+  selectedSlot = slot;
+  document.querySelectorAll('.slot-btn[data-slot]').forEach(el => {
+    el.classList.toggle('selected', el.dataset.slot === slot);
+  });
+}
+
+function selectFulfilment(choice) {
+  selectedFulfilment = choice;
+  document.querySelectorAll('.slot-btn[data-fulfilment]').forEach(el => {
+    el.classList.toggle('selected', el.dataset.fulfilment === choice);
+  });
+  const addressField = document.getElementById('deliveryAddressField');
+  if (addressField) addressField.style.display = choice === 'delivery' ? 'block' : 'none';
+}
+
+async function submitOrder() {
+  const errorEl = document.getElementById('errorText');
+  errorEl.textContent = '';
+  const name = document.getElementById('nameInput').value;
+  const mobile = document.getElementById('mobileInput').value;
+  const email = document.getElementById('emailInput').value;
+
+  if (!selectedItemId) { errorEl.textContent = 'Please choose a meal deal.'; return; }
+  if (!selectedForDate) { errorEl.textContent = 'Please choose which day this is for.'; return; }
+  if (!selectedSlot) { errorEl.textContent = 'Please choose a collection time.'; return; }
+  if (!name.trim()) { errorEl.textContent = 'Please enter your name.'; return; }
+  if (!mobile.trim()) { errorEl.textContent = 'Please enter your mobile number.'; return; }
+  if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())) { errorEl.textContent = 'Please enter a valid email.'; return; }
+
+  let deliveryAddress = '';
+  if (menu.deliveryEnabled && selectedFulfilment === 'delivery') {
+    const addressInput = document.getElementById('deliveryAddressInput');
+    deliveryAddress = addressInput ? addressInput.value.trim() : '';
+    if (!deliveryAddress) { errorEl.textContent = 'Please enter where you\'d like your order delivered.'; return; }
+  }
+
+  const itemCard = document.querySelector(`.item-card[data-id="${selectedItemId}"]`);
+  const options = {};
+  let missingOther = false;
+  let missingChoice = false;
+  itemCard.querySelectorAll('select[data-option]').forEach(sel => {
+    const optionName = sel.dataset.option;
+    if (!sel.value) { missingChoice = true; return; }
+    if (sel.value === 'Other') {
+      const otherInput = itemCard.querySelector(`input[data-other-for="${optionName}"]`);
+      const customValue = otherInput ? otherInput.value.trim() : '';
+      if (!customValue) { missingOther = true; }
+      options[optionName] = customValue || 'Other';
+    } else {
+      options[optionName] = sel.value;
+    }
+  });
+  if (missingChoice) { errorEl.textContent = 'Please choose an option for every item on the deal.'; return; }
+  if (missingOther) { errorEl.textContent = 'Please specify your "Other" choice.'; return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+
+  let sourceId = null;
+  if (squareConfig.configured) {
+    if (!card) { errorEl.textContent = 'Payment form is still loading — please wait a moment and try again.'; btn.disabled = false; return; }
+    btn.textContent = 'Processing card…';
+    const tokenResult = await card.tokenize();
+    if (tokenResult.status !== 'OK') {
+      errorEl.textContent = (tokenResult.errors && tokenResult.errors[0] && tokenResult.errors[0].message) || 'Card details could not be verified.';
+      btn.disabled = false;
+      btn.textContent = 'Pay & place order';
+      return;
+    }
+    sourceId = tokenResult.token;
+  }
+
+  btn.textContent = 'Placing order…';
+
+  try {
+    const res = await fetch(`${API}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, email, mobile, itemId: selectedItemId, options, slot: selectedSlot, sourceId,
+        forDate: selectedForDate,
+        fulfilment: menu.deliveryEnabled ? selectedFulfilment : 'collection',
+        deliveryAddress: menu.deliveryEnabled ? deliveryAddress : ''
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Something went wrong — please try again.';
+      btn.disabled = false;
+      btn.textContent = squareConfig.configured ? 'Pay & place order' : 'Place order';
+      return;
+    }
+    saveLastOrder({
+      itemId: selectedItemId, options, name, mobile, email,
+      fulfilment: menu.deliveryEnabled ? selectedFulfilment : 'collection',
+      deliveryAddress: menu.deliveryEnabled ? deliveryAddress : ''
+    });
+    const paidLine = data.order.status === 'paid'
+      ? `<br>Payment received${data.order.paymentEnvironment === 'sandbox' ? ' (test payment)' : ''} ✅`
+      : '';
+    const dateLine = data.order.dateKey === menu.todayKey ? '' : ` on <strong>${data.order.dateKey}</strong>`;
+    const fulfilmentLine = data.order.fulfilment === 'delivery'
+      ? `Delivery to: <strong>${data.order.deliveryAddress}</strong>${dateLine}<br>`
+      : `Collection: <strong>${data.order.slot}</strong>${dateLine}<br>`;
+    document.getElementById('content').innerHTML = `
+      <div class="confirmation">
+        <strong>Order placed ✅</strong><br><br>
+        ${data.order.itemName}${data.order.optionsText ? ' — ' + data.order.optionsText : ''}<br>
+        ${fulfilmentLine}
+        Name: ${data.order.name}${paidLine}<br><br>
+        See you then!
+      </div>`;
+  } catch (e) {
+    errorEl.textContent = 'Could not reach the server — please try again.';
+    btn.disabled = false;
+    btn.textContent = squareConfig.configured ? 'Pay & place order' : 'Place order';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

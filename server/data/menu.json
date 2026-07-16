@@ -1,0 +1,324 @@
+{
+  "adminPassword": "FoxsOutlook26!",
+  "sites": {
+    "grabgo": {
+      "label": "Grab & Go \u2014 Fox's Boatyard Staff",
+      "type": "bundle",
+      "ticketMode": "batch",
+      "items": [
+        {
+          "id": "grab-go-sandwich",
+          "name": "Grab & Go Sandwich Deal",
+          "description": "Sandwich, crisps and a drink \u2014 as per the original Grab & Go order form",
+          "price": 6.5,
+          "options": [
+            {
+              "name": "Bread choice",
+              "allowOther": false,
+              "choices": [
+                {
+                  "label": "Brown Bread",
+                  "stock": 10
+                },
+                {
+                  "label": "White Bread",
+                  "stock": 11
+                },
+                {
+                  "label": "Gluten Free",
+                  "stock": 6
+                }
+              ]
+            },
+            {
+              "name": "Filling choice",
+              "allowOther": true,
+              "choices": [
+                {
+                  "label": "Coronation Chicken, Cr\u00e8me Fra\u00eeche & Sultana",
+                  "stock": 8
+                },
+                {
+                  "label": "Egg Mayo & Cress",
+                  "stock": 9
+                },
+                {
+                  "label": "Tuna Mayo & Sweetcorn",
+                  "stock": 10
+                },
+                {
+                  "label": "Home Roasted Ham & Sweet Chilli Jam",
+                  "stock": 8
+                },
+                {
+                  "label": "Cheddar Cheese & Sweet Chilli Jam",
+                  "stock": 8
+                }
+              ]
+            },
+            {
+              "name": "Drink choice",
+              "allowOther": true,
+              "choices": [
+                {
+                  "label": "Jamaica Ginger Beer",
+                  "stock": 12
+                },
+                {
+                  "label": "Dr Pepper",
+                  "stock": 11
+                },
+                {
+                  "label": "San Pellegrino Lemon",
+                  "stock": 10
+                },
+                {
+                  "label": "San Pellegrino Orange",
+                  "stock": 10
+                },
+                {
+                  "label": "San Pellegrino Pomegranate",
+                  "stock": 10
+                },
+                {
+                  "label": "San Pellegrino Blood Orange",
+                  "stock": 10
+                }
+              ]
+            },
+            {
+              "name": "Crisps choice",
+              "allowOther": true,
+              "choices": [
+                {
+                  "label": "Pipers Sea Salted",
+                  "stock": 14
+                },
+                {
+                  "label": "Pipers Cheddar & Onion",
+                  "stock": 15
+                },
+                {
+                  "label": "Pipers Sweet Chilli",
+                  "stock": 15
+                }
+              ]
+            }
+          ],
+          "active": true
+        }
+      ],
+      "settings": {
+        "openDays": [
+          "Wednesday",
+          "Thursday",
+          "Friday"
+        ],
+        "cutoff1": "09:15",
+        "collection1": "10:30",
+        "cutoff2": "11:15",
+        "collection2": "13:00",
+        "timezone": "Europe/London",
+        "orderEmailTo": "theoutlookatfoxs@gmail.com",
+        "ccChef": false,
+        "deliveryEnabled": false,
+        "advanceDays": 7,
+        "noticeText": "Fox's Marina & Boatyard staff Grab & Go \u2014 this link is for invited boatyard employees only.",
+        "squareLocationId": "LBEY23Y0E49MH",
+        "squareLocationName": "The Outlook (Main) \u2014 Fox's Marina"
+      }
+    },
+    "onsite": {
+      "label": "The Outlook \u2014 On-Site Caf\u00e9 Menu",
+      "type": "cart",
+      "ticketMode": "immediate",
+      "items": [
+        {
+          "id": "cappuccino",
+          "category": "Coffee",
+          "name": "Cappuccino",
+          "price": 3.2,
+          "stock": 28,
+          "active": true
+        },
+        {
+          "id": "flat-white",
+          "category": "Coffee",
+          "name": "Flat White",
+          "price": 3.2,
+          "stock": 30,
+          "active": true
+        },
+        {
+          "id": "latte",
+          "category": "Coffee",
+          "name": "Latte",
+          "price": 3.3,
+          "stock": 30,
+          "active": true
+        },
+        {
+          "id": "americano",
+          "category": "Coffee",
+          "name": "Americano",
+          "price": 2.9,
+          "stock": 30,
+          "active": true
+        },
+        {
+          "id": "espresso",
+          "category": "Coffee",
+          "name": "Espresso",
+          "price": 2.5,
+          "stock": 30,
+          "active": true
+        },
+        {
+          "id": "double-espresso",
+          "category": "Coffee",
+          "name": "Double Espresso",
+          "price": 2.9,
+          "stock": 30,
+          "active": true
+        },
+        {
+          "id": "tea",
+          "category": "Tea",
+          "name": "Tea",
+          "price": 2.5,
+          "stock": 30,
+          "active": true
+        },
+        {
+          "id": "jamaica-ginger-beer",
+          "category": "Soft Drinks",
+          "name": "Jamaica Ginger Beer",
+          "price": 2.2,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "dr-pepper",
+          "category": "Soft Drinks",
+          "name": "Dr Pepper",
+          "price": 2.2,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "san-pellegrino-lemon",
+          "category": "Soft Drinks",
+          "name": "San Pellegrino Lemon",
+          "price": 2.2,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "san-pellegrino-orange",
+          "category": "Soft Drinks",
+          "name": "San Pellegrino Orange",
+          "price": 2.2,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "san-pellegrino-pomegranate",
+          "category": "Soft Drinks",
+          "name": "San Pellegrino Pomegranate",
+          "price": 2.2,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "san-pellegrino-blood-orange",
+          "category": "Soft Drinks",
+          "name": "San Pellegrino Blood Orange",
+          "price": 2.2,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "bagel",
+          "category": "Food",
+          "name": "Bagel",
+          "price": 3.5,
+          "stock": 15,
+          "active": true
+        },
+        {
+          "id": "sausage-roll",
+          "category": "Food",
+          "name": "Sausage Roll",
+          "price": 3,
+          "stock": 15,
+          "active": true
+        },
+        {
+          "id": "scotch-egg",
+          "category": "Food",
+          "name": "Scotch Egg",
+          "price": 3,
+          "stock": 15,
+          "active": true
+        },
+        {
+          "id": "flapjack",
+          "category": "Food",
+          "name": "Flapjack",
+          "price": 2.5,
+          "stock": 15,
+          "active": true
+        },
+        {
+          "id": "cake-of-the-day",
+          "category": "Food",
+          "name": "Cake of the Day",
+          "price": 3.5,
+          "stock": 10,
+          "active": true
+        },
+        {
+          "id": "chips",
+          "category": "Food",
+          "name": "Chips",
+          "price": 3,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "bacon-roll",
+          "category": "Food",
+          "name": "Bacon Roll",
+          "price": 4.5,
+          "stock": 20,
+          "active": true
+        },
+        {
+          "id": "breakfast-bar",
+          "category": "Food",
+          "name": "Breakfast Bar",
+          "price": 1.8,
+          "stock": 15,
+          "active": true
+        }
+      ],
+      "settings": {
+        "openDays": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ],
+        "timezone": "Europe/London",
+        "lastOrderTime": "14:00",
+        "advanceDays": 7,
+        "noticeText": "The Outlook at Fox's \u2014 on-site caf\u00e9 menu, open to staff of all businesses based at Fox's Marina & Boatyard. Order ahead, collect from The Outlook.",
+        "squareLocationId": "LBEY23Y0E49MH",
+        "squareLocationName": "The Outlook (Main) \u2014 Fox's Marina"
+      }
+    }
+  }
+}
