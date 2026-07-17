@@ -109,4 +109,30 @@ async function sendPasswordResetEmail({ resetUrl }) {
   return sendRawEmail({ to: RECOVERY_EMAIL, subject, text });
 }
 
-module.exports = { sendOrderSummary, sendPasswordResetEmail, sendRawEmail, RECOVERY_EMAIL };
+// Plain-text backup of a single On-Site Cafe order — emailed to The Outlook inbox the
+// moment the order is placed, so a missed or failed till print never loses an order.
+async function sendCafeOrderEmail({ to, order, ticket, dateLabel }) {
+  const lines = (order.items || []).map(l => `- ${l.qty}x ${l.name} (£${(l.price * l.qty).toFixed(2)})`).join('\n');
+  const contact = [order.mobile, order.email].filter(Boolean).join(' / ');
+  const printed = ticket && ticket.sent
+    ? 'Till ticket: printed automatically.'
+    : (ticket && ticket.deferred
+      ? `Till ticket: will print on the morning of ${ticket.forDate}.`
+      : 'TILL TICKET DID NOT PRINT — use this email as the order ticket.');
+  const subject = `Cafe order — ${order.name} — for ${order.dateKey}${order.status === 'paid' ? ' (PAID)' : ''}`;
+  const text = `On-Site Cafe order (backup copy)
+
+For date: ${order.dateKey}
+Placed: ${dateLabel}
+Name: ${order.name}${contact ? '\nContact: ' + contact : ''}
+
+${lines}
+
+Total: £${order.totalPrice.toFixed(2)}
+Payment: ${order.status === 'paid' ? 'PAID via Square' : order.status}
+
+${printed}`;
+  return sendRawEmail({ to, subject, text });
+}
+
+module.exports = { sendOrderSummary, sendPasswordResetEmail, sendCafeOrderEmail, sendRawEmail, RECOVERY_EMAIL };
