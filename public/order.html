@@ -104,6 +104,7 @@ function loadSquareScript(env) {
 async function initializeCard() {
   const payments = window.Square.payments(squareConfig.applicationId, squareConfig.locationId);
   card = await payments.card();
+  document.getElementById('card-container').textContent = ''; // clear the 'Loading payment form' placeholder
   await card.attach('#card-container');
 }
 
