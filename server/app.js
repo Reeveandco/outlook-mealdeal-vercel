@@ -14,7 +14,7 @@ const crypto = require('crypto');
 const store = require('./store');
 const slots = require('./slots');
 const square = require('./square');
-const { sendOrderSummary, sendPasswordResetEmail } = require('./emailer');
+const { sendOrderSummary, sendPasswordResetEmail, sendCafeOrderEmail } = require('./emailer');
 const {
     compileAndSend,
     runCafeMorningJob,
@@ -366,6 +366,19 @@ async function handleCartOrder(req, res, site) {
           ticket = { attempted: false, deferred: true, forDate: resolvedForDate };
           order.ticketPrinted = false;
     }
+
+  // Email backup of every cafe order to The Outlook inbox — a missed or failed
+  // till print never loses an order this way.
+  try {
+    await sendCafeOrderEmail({
+      to: site.settings.orderEmailTo || 'theoutlookatfoxs@gmail.com',
+      order,
+      ticket,
+      dateLabel: todayLabel(site.settings.timezone)
+    });
+  } catch (err) {
+    console.error('On-Site Cafe backup email failed:', err.message);
+  }
 
   const allOrders = await store.readOrders();
     const idx = allOrders.findIndex(o => o.id === order.id);
