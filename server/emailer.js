@@ -135,4 +135,49 @@ ${printed}`;
   return sendRawEmail({ to, subject, text });
 }
 
-module.exports = { sendOrderSummary, sendPasswordResetEmail, sendCafeOrderEmail, sendRawEmail, RECOVERY_EMAIL };
+// Confirmation email to the CUSTOMER the moment their order is placed. Works for both
+// order shapes: cart orders (order.items array) and bundle orders (order.itemName).
+async function sendCustomerConfirmation({ to, order, siteLabel, totalPrice }) {
+  const itemsText = Array.isArray(order.items)
+    ? order.items.map(l => `- ${l.qty}x ${l.name}`).join('\n')
+    : `- ${order.itemName}${order.optionsText ? ' (' + order.optionsText + ')' : ''}`;
+  const when = order.slot
+    ? `Collection: ${order.slot} on ${order.dateKey}`
+    : `For: ${order.dateKey} — collect from The Outlook`;
+  const paidLine = order.status === 'paid' && totalPrice != null
+    ? `\nPaid: £${Number(totalPrice).toFixed(2)} (card)`
+    : '';
+  const subject = `Order confirmed — ${siteLabel} — ${order.dateKey}`;
+  const text = `Hi ${order.name},
+
+Thanks for your order — here's your confirmation.
+
+${itemsText}
+
+${when}${paidLine}
+
+Any problems, call The Outlook on 07346 149142.
+
+The Outlook at Fox's
+Fox's Marina & Boatyard, The Strand, Ipswich, Suffolk, IP2 8NJ`;
+  return sendRawEmail({ to, subject, text });
+}
+
+// Gentle 'we miss you' reminder for opted-in customers who haven't ordered in a while.
+async function sendReminderEmail({ to, name, siteLabel, orderUrl, unsubscribeUrl }) {
+  const subject = `Fancy something from The Outlook this week?`;
+  const text = `Hi ${name},
+
+It's been a little while since your last ${siteLabel} order — just a nudge in case
+you'd like to get something in for this week.
+
+Order here: ${orderUrl}
+
+The Outlook at Fox's
+Fox's Marina & Boatyard, The Strand, Ipswich, Suffolk, IP2 8NJ
+
+Don't want these reminders? Unsubscribe here: ${unsubscribeUrl}`;
+  return sendRawEmail({ to, subject, text });
+}
+
+module.exports = { sendOrderSummary, sendPasswordResetEmail, sendCafeOrderEmail, sendCustomerConfirmation, sendReminderEmail, sendRawEmail, RECOVERY_EMAIL };
