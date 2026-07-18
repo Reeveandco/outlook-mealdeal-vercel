@@ -7,7 +7,8 @@
 
 const store = require('./store');
 const square = require('./square');
-const { sendOrderSummary } = require('./emailer');
+const { sendOrderSummary, sendReminderEmail } = require('./emailer');
+const crypto = require('crypto');
 
 const DEFAULT_SITE = 'grabgo';
 const CHEF_EMAIL = 'mr.simongomes@googlemail.com';
@@ -93,5 +94,55 @@ function todayLabel(timezone) {
                                                                                                                                                                                                                         return { ran: true, printedCount };
                                                                                                                                                                                                                         }
                                                                                                                                                                                                                         
-                                                                                                                                                                                                                        module.exports = { compileAndSend, runCafeMorningJob, getSite, todayKey, todayLabel, DEFAULT_SITE, CHEF_EMAIL };
+                                                                                                                                                                                                                        // Daily marketing job: email opted-in customers who haven't ordered in REMINDER_DAYS.
+// One reminder per lapse — reminderSentAt on their latest order stops repeats until
+// they order again. Most recent order's opt-in choice always wins.
+const REMINDER_DAYS = 10;
+const PUBLIC_BASE_URL = 'https://outlook-mealdeal-vercel.vercel.app';
+
+function unsubscribeSig(email) {
+  return crypto.createHmac('sha256', process.env.CRON_SECRET || 'dev')
+    .update(String(email).toLowerCase()).digest('hex');
+}
+
+async function runMarketingReminders() {
+  const menu = await store.readMenu();
+  const orders = await store.readOrders();
+  const byEmail = new Map();
+  for (const o of orders) {
+    if (!o.email) continue;
+    const k = o.email.toLowerCase();
+    if (!byEmail.has(k)) byEmail.set(k, []);
+    byEmail.get(k).push(o);
+  }
+  const now = Date.now();
+  let sent = 0, skipped = 0;
+  for (const [email, list] of byEmail) {
+    list.sort((a, b) => String(a.placedAt).localeCompare(String(b.placedAt)));
+    const latest = list[list.length - 1];
+    if (!latest.marketingOptIn) { skipped++; continue; }
+    const daysSince = (now - Date.parse(latest.placedAt)) / 86400000;
+    if (daysSince < REMINDER_DAYS || latest.reminderSentAt) { skipped++; continue; }
+    const siteId = latest.site || DEFAULT_SITE;
+    const site = getSite(menu, siteId);
+    const page = siteId === 'onsite' ? 'onsite-order.html' : 'order.html';
+    try {
+      await sendReminderEmail({
+        to: latest.email,
+        name: latest.name,
+        siteLabel: site ? site.label : 'The Outlook',
+        orderUrl: PUBLIC_BASE_URL + '/' + page,
+        unsubscribeUrl: PUBLIC_BASE_URL + '/api/unsubscribe?email=' + encodeURIComponent(email) + '&sig=' + unsubscribeSig(email)
+      });
+      latest.reminderSentAt = new Date().toISOString();
+      sent += 1;
+    } catch (err) {
+      console.error('Reminder email failed for ' + email + ':', err.message);
+    }
+  }
+  if (sent > 0) await store.writeOrders(orders);
+  return { ran: true, sent, skipped };
+}
+
+module.exports = { compileAndSend, runCafeMorningJob, runMarketingReminders, unsubscribeSig, getSite, todayKey, todayLabel, DEFAULT_SITE, CHEF_EMAIL };
                                                                                                                                                                                                                         
