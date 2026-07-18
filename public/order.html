@@ -215,6 +215,10 @@ function render() {
 
     ${cardSection}
 
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:0.85rem;color:#555;margin:12px 0;cursor:pointer;">
+      <input type="checkbox" id="marketingOptIn" style="margin-top:2px;">
+      <span>Keep me posted &mdash; occasional offers and order reminders from The Outlook by email. Unsubscribe any time.</span>
+    </label>
     <button class="primary" id="submitBtn" onclick="submitOrder()">${payLabel}</button>
     <div id="errorText" class="error-text"></div>
     <div class="small" style="margin-top:14px;">${paymentNote}</div>
@@ -379,7 +383,8 @@ async function submitOrder() {
         name, email, mobile, itemId: selectedItemId, options, slot: selectedSlot, sourceId,
         forDate: selectedForDate,
         fulfilment: menu.deliveryEnabled ? selectedFulfilment : 'collection',
-        deliveryAddress: menu.deliveryEnabled ? deliveryAddress : ''
+        deliveryAddress: menu.deliveryEnabled ? deliveryAddress : '',
+        marketingOptIn: !!(document.getElementById('marketingOptIn') && document.getElementById('marketingOptIn').checked)
       })
     });
     const data = await res.json();
