@@ -14,7 +14,7 @@ const crypto = require('crypto');
 const store = require('./store');
 const slots = require('./slots');
 const square = require('./square');
-const { sendOrderSummary, sendPasswordResetEmail, sendCafeOrderEmail } = require('./emailer');
+const { sendOrderSummary, sendPasswordResetEmail, sendCafeOrderEmail, sendCustomerConfirmation } = require('./emailer');
 const {
     compileAndSend,
     runCafeMorningJob,
@@ -22,7 +22,8 @@ const {
     todayKey,
     todayLabel,
     DEFAULT_SITE,
-    CHEF_EMAIL
+    CHEF_EMAIL,
+    unsubscribeSig
 } = require('./jobs');
 
 const app = express();
@@ -126,7 +127,7 @@ app.post('/api/orders', async (req, res) => {
 });
 
 async function handleBundleOrder(req, res, site) {
-    const { name, email, mobile, itemId, options, slot, sourceId, fulfilment, deliveryAddress, forDate } = req.body || {};
+    const { name, email, mobile, itemId, options, slot, sourceId, fulfilment, deliveryAddress, forDate, marketingOptIn } = req.body || {};
 
   if (!name || !name.trim()) {
         return res.status(400).json({ error: 'Name is required' });
@@ -217,6 +218,7 @@ async function handleBundleOrder(req, res, site) {
         placedDateKey: todayKeyValue,
         placedAt: new Date().toISOString(),
         status: 'placed',
+        marketingOptIn: !!marketingOptIn,
         paymentEnvironment: square.isProduction() ? 'production' : 'sandbox'
   };
 
@@ -260,11 +262,18 @@ async function handleBundleOrder(req, res, site) {
     orders.push(order);
     await store.writeOrders(orders);
 
+  // Confirmation email to the customer (never blocks the order).
+  try {
+    await sendCustomerConfirmation({ to: order.email, order, siteLabel: site.label, totalPrice: item.price });
+  } catch (err) {
+    console.error('Customer confirmation email failed:', err.message);
+  }
+  
   res.json({ ok: true, order });
 }
 
 async function handleCartOrder(req, res, site) {
-    const { name, email, mobile, items, sourceId, forDate } = req.body || {};
+    const { name, email, mobile, items, sourceId, forDate, marketingOptIn } = req.body || {};
 
   if (!name || !name.trim()) {
         return res.status(400).json({ error: 'Name is required' });
@@ -318,6 +327,7 @@ async function handleCartOrder(req, res, site) {
         placedDateKey: todayKeyValue,
         placedAt: new Date().toISOString(),
         status: 'placed',
+        marketingOptIn: !!marketingOptIn,
         paymentEnvironment: square.isProduction() ? 'production' : 'sandbox'
   };
 
@@ -380,12 +390,43 @@ async function handleCartOrder(req, res, site) {
     console.error('On-Site Cafe backup email failed:', err.message);
   }
 
+  // Confirmation email to the customer (never blocks the order).
+  try {
+    await sendCustomerConfirmation({ to: order.email, order, siteLabel: site.label, totalPrice: order.totalPrice });
+  } catch (err) {
+    console.error('Customer confirmation email failed:', err.message);
+  }
+
   const allOrders = await store.readOrders();
     const idx = allOrders.findIndex(o => o.id === order.id);
     if (idx !== -1) { allOrders[idx] = order; await store.writeOrders(allOrders); }
 
   res.json({ ok: true, order, ticket });
 }
+
+// One-click unsubscribe from marketing/reminder emails. Link is signed with an HMAC
+// so addresses can't be unsubscribed by guessing the URL.
+app.get('/api/unsubscribe', async (req, res) => {
+  try {
+    const email = String(req.query.email || '').toLowerCase();
+    const sig = String(req.query.sig || '');
+    if (!email || sig !== unsubscribeSig(email)) {
+      return res.status(400).send('This unsubscribe link is not valid.');
+    }
+    const orders = await store.readOrders();
+    let changed = 0;
+    for (const o of orders) {
+      if ((o.email || '').toLowerCase() === email && o.marketingOptIn) {
+        o.marketingOptIn = false;
+        changed += 1;
+      }
+    }
+    if (changed > 0) await store.writeOrders(orders);
+    res.send('Done — you will no longer receive order reminders from The Outlook.');
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ---------- admin endpoints ----------
 
