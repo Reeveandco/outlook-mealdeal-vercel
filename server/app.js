@@ -85,6 +85,7 @@ async function publicMenu(siteId) {
           isOpenToday: slots.isOpenToday(site.settings),
           openDays: site.settings.openDays,
           deliveryEnabled: Boolean(site.settings.deliveryEnabled),
+          staffCodeRequired: Boolean(staffCodeFor(site)),
           forDates,
           todayKey: todayKeyValue
     };
@@ -94,7 +95,33 @@ function findChoice(option, label) {
     return (option.choices || []).find(c => c.label === label);
 }
 
+// Optional staff access code for a site (set in admin). Blank = no code needed, which is
+// the behaviour before this was added. Compared case-insensitively, spaces ignored.
+function staffCodeFor(site) {
+    return ((site && site.settings && site.settings.staffCode) || '').trim();
+}
+function staffCodeMatches(site, supplied) {
+    const norm = v => String(v || '').replace(/\s+/g, '').toLowerCase();
+    const code = staffCodeFor(site);
+    return !code || norm(supplied) === norm(code);
+}
+
 // ---------- public endpoints ----------
+
+// Staff sign-in for The Outlook app / web page: checks the site's staff access code.
+app.post('/api/staff-login', async (req, res) => {
+    try {
+          const menu = await store.readMenu();
+          const site = getSite(menu, (req.body && req.body.site) || DEFAULT_SITE);
+          if (!site) return res.status(400).json({ error: 'Unknown site' });
+          if (!staffCodeMatches(site, req.body && req.body.code)) {
+                  return res.status(401).json({ error: 'That staff code is not right - ask The Outlook for the current code.' });
+          }
+          res.json({ ok: true, site: site.id, label: site.label, codeRequired: Boolean(staffCodeFor(site)) });
+    } catch (err) {
+          res.status(500).json({ error: err.message });
+    }
+});
 
 app.get('/api/menu', async (req, res) => {
     try {
@@ -127,7 +154,11 @@ app.post('/api/orders', async (req, res) => {
 });
 
 async function handleBundleOrder(req, res, site) {
-    const { name, email, mobile, itemId, options, slot, sourceId, fulfilment, deliveryAddress, forDate, marketingOptIn } = req.body || {};
+    const { name, email, mobile, itemId, options, slot, sourceId, fulfilment, deliveryAddress, forDate, marketingOptIn, staffCode } = req.body || {};
+
+  if (!staffCodeMatches(site, staffCode)) {
+        return res.status(403).json({ error: 'This menu is for Fox\'s Marina & Boatyard staff - please enter your staff code.', staffCodeRequired: true });
+  }
 
   if (!name || !name.trim()) {
         return res.status(400).json({ error: 'Name is required' });

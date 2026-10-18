@@ -204,6 +204,10 @@ function render() {
 
     ${fulfilmentHtml}
 
+    ${menu.staffCodeRequired ? `
+    <label class="field-label">Fox's staff code</label>
+    <input type="text" id="staffCodeInput" placeholder="From The Outlook" autocapitalize="characters" value="${(function(){try{return localStorage.getItem('grabgo_staffCode')||''}catch(e){return ''}})()}">` : ''}
+
     <label class="field-label">Your name</label>
     <input type="text" id="nameInput" placeholder="e.g. Dave Smith">
 
@@ -381,6 +385,7 @@ async function submitOrder() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name, email, mobile, itemId: selectedItemId, options, slot: selectedSlot, sourceId,
+        staffCode: (document.getElementById('staffCodeInput') || {}).value || '',
         forDate: selectedForDate,
         fulfilment: menu.deliveryEnabled ? selectedFulfilment : 'collection',
         deliveryAddress: menu.deliveryEnabled ? deliveryAddress : '',
@@ -394,6 +399,7 @@ async function submitOrder() {
       btn.textContent = squareConfig.configured ? 'Pay & place order' : 'Place order';
       return;
     }
+    try { const sc = document.getElementById('staffCodeInput'); if (sc) localStorage.setItem('grabgo_staffCode', sc.value.trim()); } catch (e) {}
     saveLastOrder({
       itemId: selectedItemId, options, name, mobile, email,
       fulfilment: menu.deliveryEnabled ? selectedFulfilment : 'collection',
