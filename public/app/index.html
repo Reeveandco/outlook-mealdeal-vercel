@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get The Outlook at Fox's app</title>
+<meta name="description" content="Order coffee, drinks and food ahead from The Outlook at Fox's Marina, Ipswich.">
+<style>
+  :root { --navy:#161e36; --cream:#faf6ec; --brown:#624418; --brass:#96792f; --muted:#6b7280; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--cream); color:var(--navy); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:440px; margin:0 auto; padding:40px 20px; text-align:center; }
+  h1 { font-family:"Courier New",Courier,monospace; color:var(--brown); font-size:30px; letter-spacing:1px; margin:0 0 6px; }
+  p { color:var(--muted); line-height:1.5; }
+  a.btn { display:block; margin:14px 0; padding:15px; border-radius:12px; background:var(--navy); color:#fff; text-decoration:none; font-weight:600; }
+  a.btn.alt { background:#fff; color:var(--navy); border:1px solid #c9c3ad; }
+  .soon { display:block; margin:14px 0; padding:15px; border-radius:12px; border:1px dashed #c9c3ad; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>THE OUTLOOK</h1>
+  <p>Order ahead from The Outlook at Fox's Marina: coffee, drinks and food, paid by card and ready to collect.</p>
+  <a class="btn" id="ios" href="https://apps.apple.com/gb/app/id6824172512">Download on the App Store</a>
+  <span id="android"></span>
+  <p style="font-size:13px">Run by Reeves Events · My Gathering Ltd</p>
+</main>
+<script>
+  // Set to true once the app is live on Google Play.
+  var PLAY_LIVE = false;
+  var IOS = "https://apps.apple.com/gb/app/id6824172512";
+  var PLAY = "https://play.google.com/store/apps/details?id=com.reevesevents.theoutlook";
+  var ua = navigator.userAgent || "";
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/i.test(ua);
+  document.getElementById("android").innerHTML = PLAY_LIVE
+    ? '<a class="btn alt" href="' + PLAY + '">Get it on Google Play</a>'
+    : '<span class="soon">Android version coming soon to Google Play</span>';
+  if (isIOS) location.replace(IOS);
+  else if (isAndroid && PLAY_LIVE) location.replace(PLAY);
+</script>
+</body>
+</html>
