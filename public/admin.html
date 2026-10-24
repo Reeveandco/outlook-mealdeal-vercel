@@ -135,7 +135,7 @@
           <input type="checkbox" id="ccChef"> CC Simon (chef) — mr.simongomes@googlemail.com — on these emails
         </label>
         <label class="allow-other-label" style="margin-top:10px; font-size:13px;">
-          <input type="checkbox" id="deliveryEnabled"> Enable delivery option (in testing — leave off until ready for staff to see it)
+          <input type="checkbox" id="deliveryEnabled" hidden disabled>
         </label>
         <label class="field-label">Fox's staff access code (staff enter this once to sign in on the app or order page; leave blank to let anyone order)</label>
         <input type="text" id="staffCode" placeholder="e.g. FOXS2026">
@@ -469,7 +469,7 @@ async function saveMenu() {
     currentMenu.settings.collection2 = document.getElementById('collection2').value;
     currentMenu.settings.orderEmailTo = document.getElementById('orderEmailTo').value;
     currentMenu.settings.ccChef = document.getElementById('ccChef').checked;
-    currentMenu.settings.deliveryEnabled = document.getElementById('deliveryEnabled').checked;
+    currentMenu.settings.deliveryEnabled = false;
     currentMenu.settings.staffCode = document.getElementById('staffCode').value.trim();
   } else {
     currentMenu.settings.lastOrderTime = document.getElementById('lastOrderTime').value;

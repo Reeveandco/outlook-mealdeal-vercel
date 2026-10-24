@@ -84,7 +84,7 @@ async function publicMenu(siteId) {
           ordersOpen: forDates.length > 0,
           isOpenToday: slots.isOpenToday(site.settings),
           openDays: site.settings.openDays,
-          deliveryEnabled: Boolean(site.settings.deliveryEnabled),
+          deliveryEnabled: false, // delivery withdrawn (Oct 2026): not offered in the app or order page
           staffCodeRequired: Boolean(staffCodeFor(site)),
           forDates,
           todayKey: todayKeyValue
@@ -200,7 +200,7 @@ async function handleBundleOrder(req, res, site) {
           return res.status(400).json({ error: 'Payment details are required' });
     }
 
-  const deliveryFeatureOn = Boolean(site.settings.deliveryEnabled);
+  const deliveryFeatureOn = false; // delivery withdrawn (Oct 2026)
     let resolvedFulfilment = 'collection';
     let resolvedDeliveryAddress = '';
     if (deliveryFeatureOn && fulfilment === 'delivery') {
