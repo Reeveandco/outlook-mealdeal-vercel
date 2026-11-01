@@ -28,6 +28,8 @@
 <script>
   // Set to true once the app is live on Google Play.
   var PLAY_LIVE = true;
+  // Set to true once Apple has approved the iPhone app.
+  var IOS_LIVE = false;
   var IOS = "https://apps.apple.com/gb/app/id6824172512";
   var PLAY = "https://play.google.com/store/apps/details?id=com.reevesevents.theoutlook";
   var ua = navigator.userAgent || "";
@@ -36,7 +38,8 @@
   document.getElementById("android").innerHTML = PLAY_LIVE
     ? '<a class="btn alt" href="' + PLAY + '">Get it on Google Play</a>'
     : '<span class="soon">Android version coming soon to Google Play</span>';
-  if (isIOS) location.replace(IOS);
+  if (!IOS_LIVE) document.getElementById("ios").outerHTML = '<span class="soon">iPhone version coming soon to the App Store</span>';
+  if (isIOS && IOS_LIVE) location.replace(IOS);
   else if (isAndroid && PLAY_LIVE) location.replace(PLAY);
 </script>
 </body>
