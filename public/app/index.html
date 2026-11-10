@@ -38,7 +38,7 @@
   document.getElementById("android").innerHTML = PLAY_LIVE
     ? '<a class="btn alt" href="' + PLAY + '">Get it on Google Play</a>'
     : '<span class="soon">Android version coming soon to Google Play</span>';
-  if (!IOS_LIVE) document.getElementById("ios").outerHTML = '<span class="soon">iPhone version coming soon to the App Store</span>';
+  if (!IOS_LIVE) document.getElementById("ios").outerHTML = '<span class="soon">On an iPhone, order on the web:</span><a class="btn" href="/onsite-order.html">Offices at Fox\'s: caf\u00e9 menu</a><a class="btn alt" href="/order.html">Fox\'s staff: Grab &amp; Go</a>';
   if (isIOS && IOS_LIVE) location.replace(IOS);
   else if (isAndroid && PLAY_LIVE) location.replace(PLAY);
 </script>
